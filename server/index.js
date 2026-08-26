@@ -84,7 +84,29 @@ app.get('/api/catalog', (req, res) => {
 // Admin : ajouter un produit.
 app.post('/api/admin/catalog/add', (req, res) => {
   if (!checkAdmin(req)) return res.status(401).json({ message: 'Non autorisé.' });
-  const { name, price, description, emoji, category } = req.body
+   const { name, price, description, emoji, category } = req.body || {};
+  if (!name || !price) return res.status(400).json({ message: 'Nom et prix requis.' });
+  const items = loadCatalog();
+  const item = {
+    id: crypto.randomUUID(),
+    name, price, description: description || '', emoji: emoji || '🃏',
+    category: category || '', createdAt: Date.now()
+  };
+  items.unshift(item);
+  saveCatalog(items);
+  res.json({ ok: true, items });
+});
+
+// Admin : supprimer un produit.
+app.post('/api/admin/catalog/delete', (req, res) => {
+  if (!checkAdmin(req)) return res.status(401).json({ message: 'Non autorisé.' });
+  const { id } = req.body || {};
+  const items = loadCatalog().filter(it => it.id !== id);
+  saveCatalog(items);
+  res.json({ ok: true, items });
+});
+
+// Jetons de session temporaires en mémoire (30 min pour faire l'analyse après avoir payé).
 // Jetons de session temporaires en mémoire (30 min pour faire l'analyse après avoir payé).
 const activeSessions = new Map(); // token -> { used, createdAt }
 const SESSION_TTL_MS = 30 * 60 * 1000;
