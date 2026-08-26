@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>KTS TCG — Administration du catalogue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ color-scheme: light; --ink:#FFFFFF; --parchment:#16202E; --parchment-dim:#57606E; --brass:#2554C7; --brass-light:#1E45B0; --line:rgba(22,32,46,0.10); }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ background:var(--ink); color:var(--parchment); font-family:'IBM Plex Sans',sans-serif; }
+  .wrap{ max-width:640px; margin:0 auto; padding:60px 24px; }
+  h1{ font-family:'Fraunces',serif; font-size:1.6rem; margin-bottom:8px; }
+  p.lede{ color:var(--parchment-dim); margin-bottom:28px; font-size:14px; }
+  label{ display:block; font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--brass-light); margin-bottom:6px; }
+  input, textarea{
+    width:100%; background:transparent; border:1px solid var(--line); color:var(--parchment);
+    padding:11px 12px; border-radius:2px; font-size:14px; margin-bottom:16px; font-family:'IBM Plex Sans',sans-serif;
+  }
+  textarea{ min-height:70px; resize:vertical; }
+  input:focus, textarea:focus{ outline:none; border-color:var(--brass); }
+  .row{ display:flex; gap:12px; }
+  .row > div{ flex:1; }
+  .btn{
+    display:inline-block; background:var(--brass); color:#FFFFFF; border:none;
+    padding:12px 22px; border-radius:2px; font-size:14px; cursor:pointer; width:100%;
+  }
+  .btn:hover{ background:#1D44A8; }
+  .btn-danger{ background:none; border:1px solid rgba(192,57,43,0.4); color:#9A2E22; padding:6px 12px; font-size:12px; width:auto; }
+  .btn-danger:hover{ background:rgba(192,57,43,0.06); }
+  .error{ color:#9A2E22; font-size:13px; margin-top:10px; display:none; }
+  .error.show{ display:block; }
+  .success{ color:#1F8A57; font-size:13px; margin-top:10px; display:none; }
+  .success.show{ display:block; }
+  .divider{ border:none; border-top:1px solid var(--line); margin:36px 0; }
+  .item{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    border:1px solid var(--line); border-radius:3px; padding:14px; margin-bottom:10px;
+  }
+  .item-emoji{ font-size:1.4rem; margin-right:10px; }
+  .item-name{ font-weight:600; }
+  .item-price{ color:var(--brass-light); font-family:'IBM Plex Mono',monospace; font-size:13px; }
+  .item-desc{ color:var(--parchment-dim); font-size:13px; margin-top:4px; }
+  .empty{ color:var(--parchment-dim); font-size:13px; font-style:italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Catalogue KTS TCG</h1>
+  <p class="lede">Ajoute ou retire des cartes affichées sur le site vitrine. Les changements apparaissent immédiatement pour les visiteurs.</p>
+
+  <label for="secret">Mot de passe administrateur</label>
+  <input type="password" id="secret" placeholder="••••••••">
+
+  <hr class="divider">
+
+  <label for="emoji">Symbole (un emoji, ex: 🃏 🏴‍☠️ ⚡ 🐉 ⭐)</label>
+  <input type="text" id="emoji" placeholder="🃏" maxlength="4">
+
+  <label for="name">Nom de la carte</label>
+  <input type="text" id="name" placeholder="ex: Charizard VMAX">
+
+  <div class="row">
+    <div>
+      <label for="price">Prix</label>
+      <input type="text" id="price" placeholder="ex: 120€">
+    </div>
+    <div>
+      <label for="category">Catégorie (optionnel)</label>
+      <input type="text" id="category" placeholder="ex: Pokémon">
+    </div>
+  </div>
+
+  <label for="description">Description</label>
+  <textarea id="description" placeholder="ex: Carte brute, très bon état, édition Champion's Path."></textarea>
+
+  <button class="btn" id="add-btn">Ajouter au catalogue</button>
+  <div class="error" id="error"></div>
+  <div class="success" id="success">Carte ajoutée avec succès !</div>
+
+  <hr class="divider">
+
+  <label>Catalogue actuel</label>
+  <div id="items-list"><div class="empty">Chargement…</div></div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+
+function getSecret(){ return document.getElementById('secret').value; }
+function showError(msg){ const el = document.getElementById('error'); el.textContent = msg; el.classList.add('show'); }
+function hideError(){ document.getElementById('error').classList.remove('show'); }
+function showSuccess(){ const el = document.getElementById('success'); el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2500); }
+
+async function loadCatalog(){
+  const res = await fetch(API_BASE + '/api/catalog');
+  const items = await res.json();
+  renderItems(items);
+}
+
+function renderItems(items){
+  const el = document.getElementById('items-list');
+  if(!items.length){ el.innerHTML = '<div class="empty">Aucune carte pour le moment.</div>'; return; }
+  el.innerHTML = '';
+  items.forEach(it => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `
+      <div>
+        <span class="item-emoji">${it.emoji || '🃏'}</span>
+        <span class="item-name">${it.name}</span> —
+        <span class="item-price">${it.price}</span>
+        <div class="item-desc">${it.description || ''}</div>
+      </div>
+      <button class="btn-danger" data-id="${it.id}">Supprimer</button>
+    `;
+    div.querySelector('button').addEventListener('click', () => deleteItem(it.id));
+    el.appendChild(div);
+  });
+}
+
+async function deleteItem(id){
+  hideError();
+  const secret = getSecret();
+  if(!secret){ showError('Entre le mot de passe administrateur pour supprimer.'); return; }
+  const res = await fetch(API_BASE + '/api/admin/catalog/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+    body: JSON.stringify({ id })
+  });
+  const data = await res.json();
+  if(!res.ok){ showError(data.message || 'Erreur.'); return; }
+  renderItems(data.items);
+}
+
+document.getElementById('add-btn').addEventListener('click', async () => {
+  hideError();
+  const secret = getSecret();
+  if(!secret){ showError('Entre le mot de passe administrateur.'); return; }
+  const name = document.getElementById('name').value.trim();
+  const price = document.getElementById('price').value.trim();
+  if(!name || !price){ showError('Le nom et le prix sont obligatoires.'); return; }
+
+  const res = await fetch(API_BASE + '/api/admin/catalog/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+    body: JSON.stringify({
+      name, price,
+      description: document.getElementById('description').value.trim(),
+      emoji: document.getElementById('emoji').value.trim(),
+      category: document.getElementById('category').value.trim()
+    })
+  });
+  const data = await res.json();
+  if(!res.ok){ showError(data.message || 'Erreur.'); return; }
+
+  document.getElementById('name').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('description').value = '';
+  document.getElementById('emoji').value = '';
+  document.getElementById('category').value = '';
+  showSuccess();
+  renderItems(data.items);
+});
+
+loadCatalog();
+</script>
+</body>
+</html>
