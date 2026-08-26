@@ -22,6 +22,15 @@ const app = express();
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// CORS — autorise le site vitrine (autre domaine) à appeler l'API du catalogue.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,x-admin-secret');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
@@ -49,7 +58,33 @@ function saveGrants(grants) {
   fs.mkdirSync(path.dirname(GRANTS_FILE), { recursive: true });
   fs.writeFileSync(GRANTS_FILE, JSON.stringify(grants, null, 2));
 }
+// ---------------------------------------------------------------------------
+// CATALOGUE — liste des cartes/produits affichés sur le site vitrine.
+// Géré depuis la page catalogue-admin.html (protégée par ADMIN_SECRET).
+// ---------------------------------------------------------------------------
+const CATALOG_FILE = path.join(__dirname, '..', 'data', 'catalog.json');
 
+function loadCatalog() {
+  try { return JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')); }
+  catch { return []; }
+}
+function saveCatalog(items) {
+  fs.mkdirSync(path.dirname(CATALOG_FILE), { recursive: true });
+  fs.writeFileSync(CATALOG_FILE, JSON.stringify(items, null, 2));
+}
+function checkAdmin(req) {
+  return ADMIN_SECRET && req.headers['x-admin-secret'] === ADMIN_SECRET;
+}
+
+// Public : le site vitrine récupère la liste des produits à afficher.
+app.get('/api/catalog', (req, res) => {
+  res.json(loadCatalog());
+});
+
+// Admin : ajouter un produit.
+app.post('/api/admin/catalog/add', (req, res) => {
+  if (!checkAdmin(req)) return res.status(401).json({ message: 'Non autorisé.' });
+  const { name, price, description, emoji, category } = req.body
 // Jetons de session temporaires en mémoire (30 min pour faire l'analyse après avoir payé).
 const activeSessions = new Map(); // token -> { used, createdAt }
 const SESSION_TTL_MS = 30 * 60 * 1000;
