@@ -44,6 +44,8 @@
   .item-price{ color:var(--brass-light); font-family:'IBM Plex Mono',monospace; font-size:13px; }
   .item-desc{ color:var(--parchment-dim); font-size:13px; margin-top:4px; }
   .empty{ color:var(--parchment-dim); font-size:13px; font-style:italic; }
+  .item-photo, .preview-photo{ width:56px; height:56px; object-fit:cover; border-radius:3px; margin-right:10px; vertical-align:middle; }
+  .preview-photo{ width:90px; height:90px; }
 </style>
 </head>
 <body>
@@ -56,8 +58,12 @@
 
   <hr class="divider">
 
-  <label for="emoji">Symbole (un emoji, ex: 🃏 🏴‍☠️ ⚡ 🐉 ⭐)</label>
+  <label for="emoji">Symbole (un emoji, ex: 🃏 🏴‍☠️ ⚡ 🐉 ⭐) — utilisé si pas de photo</label>
   <input type="text" id="emoji" placeholder="🃏" maxlength="4">
+
+  <label for="photo">Photo de la carte (optionnel)</label>
+  <input type="file" id="photo" accept="image/*">
+  <div id="photo-preview" style="margin-bottom:16px;"></div>
 
   <label for="name">Nom de la carte</label>
   <input type="text" id="name" placeholder="ex: Charizard VMAX">
@@ -88,11 +94,24 @@
 
 <script>
 const API_BASE = window.location.origin;
+let currentPhotoDataUrl = '';
 
 function getSecret(){ return document.getElementById('secret').value; }
 function showError(msg){ const el = document.getElementById('error'); el.textContent = msg; el.classList.add('show'); }
 function hideError(){ document.getElementById('error').classList.remove('show'); }
 function showSuccess(){ const el = document.getElementById('success'); el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2500); }
+
+document.getElementById('photo').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const preview = document.getElementById('photo-preview');
+  if(!file){ currentPhotoDataUrl = ''; preview.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    currentPhotoDataUrl = reader.result;
+    preview.innerHTML = `<img src="${currentPhotoDataUrl}" class="preview-photo">`;
+  };
+  reader.readAsDataURL(file);
+});
 
 async function loadCatalog(){
   const res = await fetch(API_BASE + '/api/catalog');
@@ -107,12 +126,17 @@ function renderItems(items){
   items.forEach(it => {
     const div = document.createElement('div');
     div.className = 'item';
+    const thumb = it.image
+      ? `<img src="${it.image}" class="item-photo">`
+      : `<span class="item-emoji">${it.emoji || '🃏'}</span>`;
     div.innerHTML = `
-      <div>
-        <span class="item-emoji">${it.emoji || '🃏'}</span>
-        <span class="item-name">${it.name}</span> —
-        <span class="item-price">${it.price}</span>
-        <div class="item-desc">${it.description || ''}</div>
+      <div style="display:flex; align-items:center;">
+        ${thumb}
+        <div>
+          <span class="item-name">${it.name}</span> —
+          <span class="item-price">${it.price}</span>
+          <div class="item-desc">${it.description || ''}</div>
+        </div>
       </div>
       <button class="btn-danger" data-id="${it.id}">Supprimer</button>
     `;
@@ -150,7 +174,8 @@ document.getElementById('add-btn').addEventListener('click', async () => {
       name, price,
       description: document.getElementById('description').value.trim(),
       emoji: document.getElementById('emoji').value.trim(),
-      category: document.getElementById('category').value.trim()
+      category: document.getElementById('category').value.trim(),
+      image: currentPhotoDataUrl
     })
   });
   const data = await res.json();
@@ -161,6 +186,9 @@ document.getElementById('add-btn').addEventListener('click', async () => {
   document.getElementById('description').value = '';
   document.getElementById('emoji').value = '';
   document.getElementById('category').value = '';
+  document.getElementById('photo').value = '';
+  document.getElementById('photo-preview').innerHTML = '';
+  currentPhotoDataUrl = '';
   showSuccess();
   renderItems(data.items);
 });
