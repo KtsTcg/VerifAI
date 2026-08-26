@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>VERIF AI — Pré-diagnostic d'authenticité | KTS TCG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: light;
+    --ink:#FFFFFF; --ink-2:#F4F7FC; --parchment:#16202E; --parchment-dim:#57606E;
+    --brass:#2554C7; --brass-light:#1E45B0; --ember:#2554C7; --moss:#5C7A5E;
+    --ok:#1F8A57; --warn:#B7791F; --bad:#C0392B;
+    --line:rgba(22,32,46,0.10);
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ background:var(--ink); color:var(--parchment); font-family:'IBM Plex Sans',sans-serif; line-height:1.6; }
+  .wrap{ max-width:820px; margin:0 auto; padding:60px 24px 100px; }
+  h1,h2,h3{ font-family:'Fraunces',serif; }
+  .mono{ font-family:'IBM Plex Mono',monospace; }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--brass-light);
+    border:1px solid var(--line); padding:6px 12px; border-radius:100px; margin-bottom:20px;
+  }
+  .eyebrow::before{ content:"◆"; font-size:9px; }
+  h1{ font-size:clamp(1.9rem,4vw,2.6rem); margin-bottom:14px; }
+  .lede{ color:var(--parchment-dim); max-width:60ch; margin-bottom:12px; }
+  .caveat{
+    border:1px solid var(--line); border-left:3px solid var(--brass); background:rgba(37,84,199,0.05);
+    padding:14px 18px; font-size:0.92rem; color:var(--parchment-dim); margin:24px 0 40px; border-radius:2px;
+  }
+  .caveat strong{ color:var(--brass-light); }
+
+  .dropzones{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px; }
+  .dropzone{
+    border:1.5px dashed var(--line); border-radius:6px; padding:28px 16px; text-align:center;
+    cursor:pointer; transition:border-color .2s, background .2s; position:relative; min-height:180px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  }
+  .dropzone.dragover, .dropzone:hover{ border-color:var(--brass); background:rgba(37,84,199,0.04); }
+  .dropzone input{ display:none; }
+  .dropzone .icon{ font-size:28px; opacity:.8; }
+  .dropzone .label{ font-size:14px; color:var(--parchment-dim); }
+  .dropzone .sub{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:rgba(22,32,46,0.45); }
+  .dropzone img.preview{ max-width:100%; max-height:160px; border-radius:4px; object-fit:contain; }
+  .dropzone .tag{
+    position:absolute; top:10px; left:10px; font-family:'IBM Plex Mono',monospace; font-size:10px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--brass-light);
+  }
+  .dropzone .clear{
+    position:absolute; top:8px; right:8px; background:rgba(22,32,46,0.75); border:1px solid rgba(255,255,255,0.2);
+    color:#FFFFFF; width:22px; height:22px; border-radius:50%; font-size:13px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+  }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; padding:13px 26px; border-radius:2px;
+    font-size:14px; font-weight:500; border:1px solid transparent; cursor:pointer; transition:all .2s;
+    font-family:'IBM Plex Sans',sans-serif;
+  }
+  .btn-primary{ background:var(--brass); color:#FFFFFF; width:100%; justify-content:center; }
+  .btn-primary:hover:not(:disabled){ background:#1D44A8; }
+  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn-ghost{ border-color:var(--line); color:var(--parchment); background:transparent; }
+  .btn-ghost:hover{ border-color:var(--brass); color:var(--brass); }
+
+  .status{ margin-top:18px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--brass-light); display:none; align-items:center; gap:10px; }
+  .status.show{ display:flex; }
+  .spinner{ width:14px; height:14px; border:2px solid rgba(37,84,199,0.2); border-top-color:var(--brass); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .error-box{
+    display:none; margin-top:18px; border:1px solid var(--bad); background:rgba(192,57,43,0.06);
+    color:#9A2E22; padding:14px 18px; border-radius:2px; font-size:14px;
+  }
+  .error-box.show{ display:block; }
+
+  .report{ display:none; margin-top:44px; border-top:1px solid var(--line); padding-top:36px; }
+  .report.show{ display:block; }
+  .report-head{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:28px; }
+  .verdict{
+    display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border-radius:4px;
+    font-family:'Fraunces',serif; font-size:1.15rem; border:1.5px solid;
+  }
+  .verdict.ok{ color:var(--ok); border-color:var(--ok); background:rgba(31,138,87,0.07); }
+  .verdict.warn{ color:var(--warn); border-color:var(--warn); background:rgba(183,121,31,0.07); }
+  .verdict.bad{ color:var(--bad); border-color:var(--bad); background:rgba(192,57,43,0.07); }
+  .confidence{ text-align:right; }
+  .confidence .num{ font-family:'Fraunces',serif; font-size:1.8rem; color:var(--brass); display:block; }
+  .confidence .lbl{ font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--parchment-dim); }
+
+  .checks{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:28px; }
+  .check-item{
+    border:1px solid var(--line); padding:14px 16px; border-radius:3px; display:flex; align-items:flex-start; gap:10px;
+  }
+  .check-item .dot{ width:9px; height:9px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+  .dot.ok{ background:var(--ok); }
+  .dot.warn{ background:var(--warn); }
+  .dot.bad{ background:var(--bad); }
+  .check-item h4{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:13.5px; margin-bottom:4px; }
+  .check-item p{ font-size:12.5px; color:var(--parchment-dim); }
+
+  .notes{ border:1px solid var(--line); padding:18px 20px; border-radius:3px; margin-bottom:20px; }
+  .notes h4{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--brass-light); margin-bottom:10px; }
+  .notes p{ font-size:14px; color:var(--parchment-dim); }
+
+  .disclaimer-final{ font-size:12.5px; color:rgba(22,32,46,0.5); font-style:italic; }
+
+  @media (max-width:600px){
+    .dropzones{ grid-template-columns:1fr; }
+    .checks{ grid-template-columns:1fr; }
+  }
+  .gate{ border:1px solid var(--line); padding:32px 28px; border-radius:4px; margin-bottom:40px; text-align:center; }
+  .gate .price{ font-family:'Fraunces',serif; font-size:2.2rem; color:var(--brass); margin-bottom:4px; }
+  .gate .price-sub{ font-size:13px; color:var(--parchment-dim); margin-bottom:22px; }
+  .gate .gate-error{ color:#9A2E22; font-size:13px; margin-top:14px; display:none; }
+  .gate .gate-error.show{ display:block; }
+  .gate .canceled-note{ color:var(--warn); font-size:13px; margin-top:14px; display:none; }
+  .gate .canceled-note.show{ display:block; }
+  .gate .checking{ display:none; align-items:center; justify-content:center; gap:10px; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--brass); }
+  .gate .checking.show{ display:flex; }
+  .manual-toggle{ display:block; margin-top:16px; font-size:12px; color:rgba(22,32,46,0.4); background:none; border:none; cursor:pointer; text-decoration:underline; }
+  .manual-code-box{ display:none; margin-top:18px; text-align:left; }
+  .manual-code-box.show{ display:block; }
+  .manual-code-box input{
+    width:100%; background:transparent; border:1px solid var(--line); color:var(--parchment);
+    padding:11px 12px; border-radius:2px; font-size:14px; margin-bottom:10px; font-family:'IBM Plex Mono',monospace; text-transform:uppercase;
+  }
+  .tool-locked{ opacity:0.35; pointer-events:none; filter:blur(1px); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KTS TCG · Outil interne</div>
+  <h1>VERIF AI — pré-diagnostic d'authenticité</h1>
+  <p class="lede">Dépose la photo recto (et verso si possible) d'une carte Pokémon. L'outil l'examine et te renvoie un rapport indicatif sur les points de contrôle visuels courants.</p>
+
+  <div class="gate" id="gate">
+    <div class="price">2,99 €</div>
+    <div class="price-sub">Paiement sécurisé par carte · remboursé si la carte part en dépôt-vente chez nous</div>
+    <button class="btn btn-primary" id="pay-btn">Payer et vérifier ma carte</button>
+    <div class="checking" id="checking">
+      <div class="spinner"></div>
+      <span>Vérification du paiement…</span>
+    </div>
+    <div class="gate-error" id="gate-error"></div>
+    <div class="canceled-note" id="canceled-note">Paiement annulé — aucune somme n'a été débitée.</div>
+
+    <button class="manual-toggle" id="manual-toggle">J'ai déjà un code d'accès</button>
+    <div class="manual-code-box" id="manual-code-box">
+      <input type="text" id="access-code" placeholder="EX: A1B2C3D4" maxlength="12">
+      <button class="btn btn-ghost" id="redeem-btn" style="width:100%">Valider le code</button>
+    </div>
+  </div>
+
+  <div id="tool-content" class="tool-locked">
+    <div class="caveat">
+      <strong>À lire avant usage :</strong> ce diagnostic est une aide visuelle basée sur une IA, pas une expertise certifiée. Il peut se tromper, en particulier face à des contrefaçons de bonne qualité ou des photos de mauvaise qualité. En cas de doute — surtout avant un achat, une vente ou un dépôt — croise toujours ce résultat avec un contrôle physique (poids, texture, découpe) ou l'avis d'un expert.
+    </div>
+
+    <div id="upload-section">
+      <div class="dropzones">
+        <div class="dropzone" id="dz-front">
+          <span class="tag">Recto</span>
+          <input type="file" id="file-front" accept="image/*">
+          <div class="dz-content">
+            <div class="icon">🃏</div>
+            <div class="label">Glisser l'image recto ici</div>
+            <div class="sub">ou cliquer pour choisir un fichier</div>
+          </div>
+        </div>
+        <div class="dropzone" id="dz-back">
+          <span class="tag">Verso (optionnel)</span>
+          <input type="file" id="file-back" accept="image/*">
+          <div class="dz-content">
+            <div class="icon">🃏</div>
+            <div class="label">Glisser l'image verso ici</div>
+            <div class="sub">ou cliquer pour choisir un fichier</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="submit-btn" disabled>Lancer l'analyse</button>
+
+      <div class="status" id="status">
+        <div class="spinner"></div>
+        <span id="status-text">Analyse en cours…</span>
+      </div>
+
+      <div class="error-box" id="error-box"></div>
+    </div>
+
+    <div class="report" id="report">
+      <div class="report-head">
+        <div class="verdict" id="verdict">—</div>
+        <div class="confidence">
+          <span class="num" id="confidence-num">—</span>
+          <span class="lbl">Indice de confiance</span>
+        </div>
+      </div>
+
+      <div class="checks" id="checks"></div>
+
+      <div class="notes">
+        <h4>Remarques</h4>
+        <p id="notes-text">—</p>
+      </div>
+
+      <p class="disclaimer-final">Rapport généré automatiquement à titre indicatif — ne remplace pas une expertise physique.</p>
+      <p class="disclaimer-final" style="margin-top:6px;">Une nouvelle analyse nécessite un nouveau paiement.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let sessionToken = null;
+const state = { front: null, back: null };
+
+function unlockTool(token){
+  sessionToken = token;
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('tool-content').classList.remove('tool-locked');
+}
+function showGateError(msg){
+  const el = document.getElementById('gate-error');
+  el.textContent = msg; el.classList.add('show');
+}
+
+// --- Paiement Stripe : lance le paiement ---
+document.getElementById('pay-btn').addEventListener('click', async () => {
+  document.getElementById('gate-error').classList.remove('show');
+  const btn = document.getElementById('pay-btn');
+  btn.disabled = true; btn.textContent = 'Redirection vers le paiement…';
+
+  try {
+    const res = await fetch('/api/create-checkout-session', { method: 'POST' });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.message || "Impossible de démarrer le paiement."); }
+    window.location.href = data.url; // redirection vers la page de paiement Stripe
+  } catch (e) {
+    showGateError(e.message);
+    btn.disabled = false; btn.textContent = 'Payer et vérifier ma carte';
+  }
+});
+
+// --- Retour automatique de Stripe : on vérifie le paiement côté serveur ---
+(async function checkReturnFromStripe(){
+  const params = new URLSearchParams(window.location.search);
+  const checkoutSessionId = params.get('checkout_session_id');
+  const canceled = params.get('canceled');
+
+  if(canceled){
+    document.getElementById('canceled-note').classList.add('show');
+    return;
+  }
+  if(!checkoutSessionId) return;
+
+  document.getElementById('pay-btn').style.display = 'none';
+  document.getElementById('checking').classList.add('show');
+
+  try {
+    const res = await fetch('/api/confirm-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkoutSessionId })
+    });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.message || "Paiement non confirmé."); }
+    unlockTool(data.sessionToken);
+  } catch (e) {
+    showGateError(e.message);
+    document.getElementById('pay-btn').style.display = 'inline-flex';
+  } finally {
+    document.getElementById('checking').classList.remove('show');
+    // Nettoie l'URL pour éviter de re-déclencher la vérification si la page est rafraîchie.
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+})();
+
+// --- Option secondaire : code manuel (cas exceptionnels donnés par la boutique) ---
+document.getElementById('manual-toggle').addEventListener('click', () => {
+  document.getElementById('manual-code-box').classList.toggle('show');
+});
+
+document.getElementById('redeem-btn').addEventListener('click', async () => {
+  document.getElementById('gate-error').classList.remove('show');
+  const code = document.getElementById('access-code').value.trim();
+  if(!code){ showGateError("Merci d'entrer un code."); return; }
+
+  const btn = document.getElementById('redeem-btn');
+  btn.disabled = true; btn.textContent = 'Vérification…';
+
+  try {
+    const res = await fetch('/api/redeem-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.message || "Code invalide."); }
+    unlockTool(data.sessionToken);
+  } catch (e) {
+    showGateError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Valider le code';
+  }
+});
+
+function setupDropzone(id, key){
+  const zone = document.getElementById(id);
+  const input = zone.querySelector('input');
+
+  zone.addEventListener('click', (e) => {
+    if(e.target.classList.contains('clear')) return;
+    input.click();
+  });
+
+  ['dragover','dragenter'].forEach(evt => zone.addEventListener(evt, (e) => {
+    e.preventDefault(); zone.classList.add('dragover');
+  }));
+  ['dragleave','drop'].forEach(evt => zone.addEventListener(evt, (e) => {
+    e.preventDefault(); zone.classList.remove('dragover');
+  }));
+  zone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    if(file) handleFile(zone, key, file);
+  });
+  input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(file) handleFile(zone, key, file);
+  });
+}
+
+function handleFile(zone, key, file){
+  if(!file.type.startsWith('image/')){
+    showError("Le fichier déposé n'est pas une image.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state[key] = { file, dataUrl: e.target.result };
+    renderPreview(zone, key, e.target.result);
+    updateSubmitState();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPreview(zone, key, dataUrl){
+  const tagLabel = key === 'front' ? 'Recto' : 'Verso (optionnel)';
+  zone.innerHTML = `
+    <span class="tag">${tagLabel}</span>
+    <span class="clear" data-key="${key}">✕</span>
+    <img class="preview" src="${dataUrl}" alt="Aperçu ${tagLabel}">
+  `;
+  zone.querySelector('.clear').addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearZone(key);
+  });
+}
+
+function clearZone(key){
+  state[key] = null;
+  const zone = document.getElementById(key === 'front' ? 'dz-front' : 'dz-back');
+  const tagLabel = key === 'front' ? 'Recto' : 'Verso (optionnel)';
+  zone.innerHTML = `
+    <span class="tag">${tagLabel}</span>
+    <input type="file" id="file-${key}" accept="image/*">
+    <div class="dz-content">
+      <div class="icon">🃏</div>
+      <div class="label">Glisser l'image ${key === 'front' ? 'recto' : 'verso'} ici</div>
+      <div class="sub">ou cliquer pour choisir un fichier</div>
+    </div>
+  `;
+  setupDropzone(key === 'front' ? 'dz-front' : 'dz-back', key);
+  updateSubmitState();
+}
+
+function updateSubmitState(){
+  document.getElementById('submit-btn').disabled = !state.front;
+}
+
+function showError(msg){
+  const box = document.getElementById('error-box');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+function hideError(){
+  document.getElementById('error-box').classList.remove('show');
+}
+
+setupDropzone('dz-front', 'front');
+setupDropzone('dz-back', 'back');
+
+const verdictMap = {
+  'Vraisemblablement Authentique': { cls: 'ok', icon: '✓' },
+  'Douteux / Suspect': { cls: 'warn', icon: '⚠' },
+  'Contrefaçon Détectée': { cls: 'bad', icon: '✕' }
+};
+
+document.getElementById('submit-btn').addEventListener('click', async () => {
+  hideError();
+  const statusEl = document.getElementById('status');
+  const reportEl = document.getElementById('report');
+  const btn = document.getElementById('submit-btn');
+
+  reportEl.classList.remove('show');
+  statusEl.classList.add('show');
+  btn.disabled = true;
+
+  try {
+    const payload = {
+      frontImage: state.front.dataUrl,
+      backImage: state.back ? state.back.dataUrl : null,
+      sessionToken
+    };
+
+    const res = await fetch('/api/verify-card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if(!res.ok){
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.message || `Le serveur a répondu avec une erreur (${res.status}).`);
+    }
+
+    const data = await res.json();
+    renderReport(data);
+    document.getElementById('upload-section').classList.add('tool-locked');
+  } catch (err) {
+    showError("L'analyse n'a pas pu aboutir : " + err.message);
+  } finally {
+    statusEl.classList.remove('show');
+    btn.disabled = false;
+  }
+});
+
+function renderReport(data){
+  const verdictEl = document.getElementById('verdict');
+  const map = verdictMap[data.statut] || { cls: 'warn', icon: '?' };
+  verdictEl.className = 'verdict ' + map.cls;
+  verdictEl.textContent = `${map.icon} ${data.statut}`;
+
+  document.getElementById('confidence-num').textContent = `${data.indice_confiance}%`;
+
+  const checksEl = document.getElementById('checks');
+  checksEl.innerHTML = '';
+  (data.points_controle || []).forEach(item => {
+    const dotClass = item.statut === 'ok' ? 'ok' : item.statut === 'attention' ? 'warn' : 'bad';
+    const div = document.createElement('div');
+    div.className = 'check-item';
+    div.innerHTML = `
+      <div class="dot ${dotClass}"></div>
+      <div>
+        <h4>${item.nom}</h4>
+        <p>${item.detail}</p>
+      </div>
+    `;
+    checksEl.appendChild(div);
+  });
+
+  document.getElementById('notes-text').textContent = data.remarques || 'Aucune remarque particulière.';
+  document.getElementById('report').classList.add('show');
+}
+</script>
+</body>
+</html>

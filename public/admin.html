@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>VERIF AI — Administration des codes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ color-scheme: light; --ink:#FFFFFF; --parchment:#16202E; --parchment-dim:#57606E; --brass:#2554C7; --brass-light:#1E45B0; --ember:#2554C7; --line:rgba(22,32,46,0.10); }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ background:var(--ink); color:var(--parchment); font-family:'IBM Plex Sans',sans-serif; }
+  .wrap{ max-width:560px; margin:0 auto; padding:60px 24px; }
+  h1{ font-family:'Fraunces',serif; font-size:1.6rem; margin-bottom:8px; }
+  p.lede{ color:var(--parchment-dim); margin-bottom:28px; font-size:14px; }
+  label{ display:block; font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--brass-light); margin-bottom:6px; }
+  input{
+    width:100%; background:transparent; border:1px solid var(--line); color:var(--parchment);
+    padding:11px 12px; border-radius:2px; font-size:14px; margin-bottom:16px; font-family:'IBM Plex Sans',sans-serif;
+  }
+  input:focus{ outline:none; border-color:var(--brass); }
+  .btn{
+    display:inline-block; background:var(--brass); color:#FFFFFF; border:none;
+    padding:12px 22px; border-radius:2px; font-size:14px; cursor:pointer; width:100%;
+  }
+  .btn:hover{ background:#1D44A8; }
+  .result{
+    margin-top:20px; border:1px solid var(--brass); background:rgba(37,84,199,0.06);
+    padding:16px; border-radius:3px; display:none;
+  }
+  .result.show{ display:block; }
+  .result .code{ font-family:'IBM Plex Mono',monospace; font-size:1.4rem; color:var(--brass-light); letter-spacing:.08em; }
+  .error{ color:#9A2E22; font-size:13px; margin-top:10px; display:none; }
+  .error.show{ display:block; }
+  table{ width:100%; border-collapse:collapse; margin-top:32px; font-size:13px; }
+  th, td{ border-bottom:1px solid var(--line); padding:8px 6px; text-align:left; }
+  th{ font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; color:var(--brass-light); }
+  .badge{ font-family:'IBM Plex Mono',monospace; font-size:10px; padding:2px 8px; border-radius:100px; }
+  .badge.used{ background:rgba(192,57,43,0.10); color:#9A2E22; }
+  .badge.free{ background:rgba(31,138,87,0.10); color:#1F8A57; }
+  .refresh{ background:none; border:1px solid var(--line); color:var(--parchment-dim); padding:6px 12px; border-radius:2px; font-size:12px; cursor:pointer; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Génération de codes VERIF AI</h1>
+  <p class="lede">Page réservée à l'administration. Génère un code, donne-le au client une fois le paiement reçu (ou l'envoi en dépôt-vente confirmé). Chaque code ne fonctionne qu'une seule fois.</p>
+
+  <label for="secret">Mot de passe administrateur</label>
+  <input type="password" id="secret" placeholder="••••••••">
+
+  <label for="note">Note (optionnel — ex: nom du client, "dépôt gratuit")</label>
+  <input type="text" id="note" placeholder="ex: Julie — dépôt gratuit">
+
+  <button class="btn" id="gen-btn">Générer un nouveau code</button>
+  <div class="error" id="error"></div>
+
+  <div class="result" id="result">
+    <div>Code à transmettre :</div>
+    <div class="code" id="code-display">—</div>
+  </div>
+
+  <button class="refresh" id="refresh-btn">Voir l'historique des codes</button>
+  <table id="history" style="display:none">
+    <thead><tr><th>Code</th><th>Note</th><th>Statut</th><th>Créé le</th></tr></thead>
+    <tbody id="history-body"></tbody>
+  </table>
+</div>
+
+<script>
+function getSecret(){ return document.getElementById('secret').value; }
+function showError(msg){
+  const el = document.getElementById('error');
+  el.textContent = msg; el.classList.add('show');
+}
+function hideError(){ document.getElementById('error').classList.remove('show'); }
+
+document.getElementById('gen-btn').addEventListener('click', async () => {
+  hideError();
+  const secret = getSecret();
+  if(!secret){ showError('Entre le mot de passe administrateur.'); return; }
+
+  const res = await fetch('/api/admin/generate-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret, note: document.getElementById('note').value })
+  });
+  const data = await res.json();
+  if(!res.ok){ showError(data.message || 'Erreur.'); return; }
+
+  document.getElementById('code-display').textContent = data.code;
+  document.getElementById('result').classList.add('show');
+});
+
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+  hideError();
+  const secret = getSecret();
+  if(!secret){ showError('Entre le mot de passe administrateur.'); return; }
+
+  const res = await fetch('/api/admin/list-codes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret })
+  });
+  const data = await res.json();
+  if(!res.ok){ showError(data.message || 'Erreur.'); return; }
+
+  const tbody = document.getElementById('history-body');
+  tbody.innerHTML = '';
+  data.codes.forEach(c => {
+    const tr = document.createElement('tr');
+    const date = new Date(c.createdAt).toLocaleString('fr-FR');
+    tr.innerHTML = `
+      <td>${c.code}</td>
+      <td>${c.note || '—'}</td>
+      <td><span class="badge ${c.used ? 'used' : 'free'}">${c.used ? 'Utilisé' : 'Disponible'}</span></td>
+      <td>${date}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('history').style.display = 'table';
+});
+</script>
+</body>
+</html>
